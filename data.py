@@ -6,7 +6,7 @@ def init_db():
         conn = sqlite3.connect("budget.db")
         c = conn.cursor()
         c.execute('''CREATE TABLE categories
-                     (name TEXT, fixed REAL, min REAL, weight REAL, active INTEGER)''')
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, fixed REAL, min REAL, weight REAL, active INTEGER)''')
         c.execute('''CREATE TABLE goals
                      (name TEXT, amount REAL, term INTEGER)''')
         conn.commit()
@@ -21,10 +21,33 @@ def load_categories():
     conn.close()
     if not categories:
         categories = [
-            {"name": "Еда", "fixed": None, "min": 5000, "weight": 8, "active": 1},
-            {"name": "Транспорт", "fixed": None, "min": 1000, "weight": 5, "active": 1},
-            {"name": "Развлечения", "fixed": None, "min": 1000, "weight": 3, "active": 1},
-            {"name": "Сбережения", "fixed": None, "min": 0, "weight": 10, "active": 1},
+            {"name": "Аренда жилья / ипотека", "fixed": 30000.0, "min": 30000.0, "weight": 5.0, "active": 1},
+            {"name": "Коммунальные услуги", "fixed": 5000.0, "min": 5000.0, "weight": 5.0, "active": 1},
+            {"name": "Интернет и мобильная связь", "fixed": 1000.0, "min": 1000.0, "weight": 4.0, "active": 1},
+            {"name": "Налоги и страховки", "fixed": 2000.0, "min": 2000.0, "weight": 4.0, "active": 1},
+            {"name": "Продукты", "fixed": None, "min": 15000.0, "weight": 7.0, "active": 1},
+            {"name": "Кафе и рестораны", "fixed": None, "min": 2000.0, "weight": 3.0, "active": 1},
+            {"name": "Проезд", "fixed": None, "min": 3000.0, "weight": 5.0, "active": 1},
+            {"name": "Обслуживание и ремонт", "fixed": None, "min": 0.0, "weight": 5.0, "active": 0},
+            {"name": "Лекарства", "fixed": None, "min": 0.0, "weight": 6.0, "active": 0},
+            {"name": "Посещение врача", "fixed": None, "min": 0.0, "weight": 6.0, "active": 0},
+            {"name": "Фитнес-клуб, бассейн", "fixed": 3000.0, "min": 3000.0, "weight": 4.0, "active": 1},
+            {"name": "Процедуры красоты", "fixed": None, "min": 0.0, "weight": 4.0, "active": 0},
+            {"name": "Одежда и обувь", "fixed": None, "min": 1000.0, "weight": 4.0, "active": 1},
+            {"name": "Электроника и гаджеты", "fixed": None, "min": 0.0, "weight": 4.0, "active": 0},
+            {"name": "Аксессуары", "fixed": None, "min": 0.0, "weight": 4.0, "active": 0},
+            {"name": "Ремонт и мебель", "fixed": None, "min": 0.0, "weight": 5.0, "active": 0},
+            {"name": "Средства и услуги", "fixed": None, "min": 0.0, "weight": 4.0, "active": 0},
+            {"name": "Кино, театры, концерты", "fixed": None, "min": 0.0, "weight": 3.0, "active": 0},
+            {"name": "Игры и подписки", "fixed": None, "min": 0.0, "weight": 3.0, "active": 0},
+            {"name": "Хобби", "fixed": None, "min": 1000.0, "weight": 3.0, "active": 1},
+            {"name": "Поездки и путешествия", "fixed": None, "min": 0.0, "weight": 3.0, "active": 0},
+            {"name": "Курсы, книги", "fixed": None, "min": 0.0, "weight": 5.0, "active": 0},
+            {"name": "Онлайн-обучение", "fixed": 2000.0, "min": 2000.0, "weight": 5.0, "active": 1},
+            {"name": "Вебинары и мастер-классы", "fixed": None, "min": 0.0, "weight": 5.0, "active": 0},
+            {"name": "Подарки", "fixed": None, "min": 0.0, "weight": 4.0, "active": 0},
+            {"name": "Прочее", "fixed": None, "min": 0.0, "weight": 2.0, "active": 0},
+            {"name": "Сбережения", "fixed": None, "min": 0.0, "weight": 8.0, "active": 1},
         ]
         save_categories(categories)
     return categories
@@ -35,7 +58,7 @@ def save_categories(categories):
     c = conn.cursor()
     c.execute("DELETE FROM categories")
     for cat in categories:
-        c.execute("INSERT INTO categories VALUES (?, ?, ?, ?, ?)",
+        c.execute("INSERT INTO categories (name, fixed, min, weight, active) VALUES (?, ?, ?, ?, ?)",
                   (cat["name"], cat["fixed"], cat["min"], cat["weight"], cat["active"]))
     conn.commit()
     conn.close()
