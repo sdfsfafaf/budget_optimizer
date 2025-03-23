@@ -63,7 +63,7 @@ def simulate_period(income, categories, debts):
             if goal["name"] not in seen_goals:
                 months_needed = goal["amount"] / total_savings * num_months if total_savings > 0 else float("inf")
                 print(f"Цель '{goal['name']}': {goal['amount']} руб. достигнута через {months_needed:.1f} мес.")
-                seen_goals.add(goal["name"]))
+                seen_goals.add(goal["name"])
 
     dates = [res[0] for res in results]
     savings = [res[1][savings_idx] for res in results]
