@@ -2,15 +2,14 @@ import sqlite3
 import os.path
 
 def init_db():
-    if not os.path.exists("budget.db"):
-        conn = sqlite3.connect("budget.db")
-        c = conn.cursor()
-        c.execute('''CREATE TABLE categories
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, fixed REAL, min REAL, weight REAL, active INTEGER)''')
-        c.execute('''CREATE TABLE goals
-                     (name TEXT, amount REAL, term INTEGER)''')
-        conn.commit()
-        conn.close()
+    conn = sqlite3.connect("budget.db")
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS categories
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, fixed REAL, min REAL, weight REAL, active INTEGER)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS goals
+                 (name TEXT, amount REAL, term INTEGER)''')
+    conn.commit()
+    conn.close()
 
 def load_categories():
     init_db()
