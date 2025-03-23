@@ -29,7 +29,7 @@ def update_debt_after_payment(remaining, payment, term):
 
 def save_budget_to_history(month, income, allocations, debt_payment):
     init_db()
-    from data import load_categories  # Импорт внутри функции, чтобы избежать циклического импорта
+    from data import load_categories
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT OR REPLACE INTO income_history VALUES (?, ?)", (month, income))
