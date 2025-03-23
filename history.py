@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
+from data import calculate_annuity_payment
 
 DB_PATH = "budget.db"
 
@@ -22,10 +23,13 @@ def load_income_history():
     conn.close()
     return history
 
-def update_debt_after_payment(remaining, payment, term):
+def update_debt_after_payment(remaining, payment, term, rate):
     if term <= 0 or remaining <= 0:
         return 0, 0
-    remaining = max(0, remaining - payment)
+    monthly_rate = rate / 12
+    interest = remaining * monthly_rate
+    principal = payment - interest
+    remaining = max(0, remaining - principal)
     term -= 1
     return remaining, term
 
