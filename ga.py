@@ -61,12 +61,17 @@ def optimize_budget(income, categories, min_savings, debt_payment=None, strategy
     best_solution = max(population, key=fitness)
 
     if strategy == "balance":
-        best_solution[savings_idx] = categories[savings_idx]["min"]
-        remaining_budget = total_budget - sum(best_solution[i] for i in range(len(categories)) if i != savings_idx)
+        best_solution[savings_idx] = min(categories[savings_idx]["min"], total_budget - sum(best_solution[i] for i in range(len(categories)) if i != savings_idx))
+        remaining_budget = total_budget - sum(best_solution[i] for i in range(len(categories)))
         if remaining_budget > 0:
             weights = [cat["weight"] for i, cat in enumerate(categories) if i in variable_indices]
             total_weight = sum(weights)
             for i, idx in enumerate(variable_indices):
-                best_solution[idx] += (remaining_budget * weights[i] / total_weight)
+                best_solution[idx] += min((remaining_budget * weights[i] / total_weight), total_budget - sum(best_solution))
+        # Нормализация, чтобы не превышать total_budget
+        total = sum(best_solution)
+        if total > total_budget:
+            scale = total_budget / total
+            best_solution = [val * scale for val in best_solution]
 
     return [max(0, val) for val in best_solution]
