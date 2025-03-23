@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from data import load_categories, save_categories, load_goals, save_goals, calculate_annuity_payment
-from ga import optimize_budget
 from history import load_income_history, update_debt_after_payment, save_budget_to_history
+from ga import optimize_budget
 
 def simulate_period(income, categories, debts):
     num_months = int(input("Введите количество месяцев для расчёта бюджета (например, 6): "))
