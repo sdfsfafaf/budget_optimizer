@@ -23,9 +23,11 @@ def load_income_history():
     return history
 
 def update_debt_after_payment(remaining, payment, term):
-    remaining -= payment
+    if term <= 0 or remaining <= 0:
+        return 0, 0
+    remaining = max(0, remaining - payment)
     term -= 1
-    return max(0, remaining), max(0, term)
+    return remaining, term
 
 def save_budget_to_history(month, income, allocations, debt_payment):
     init_db()
