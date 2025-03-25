@@ -8,7 +8,7 @@ def simulate_period(income, categories, debts):
     num_months = int(input("Введите количество месяцев для расчёта бюджета (например, 6): "))
     goals = load_goals()
     results = []
-    debt_history = {debt["name"]: {"remaining": debt["amount"], "payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), "term": debt["term"], "rate": debt["rate"]} for debt in debts}
+    debt_history = {debt["name"]: {"remaining": debt["amount"], "initial_payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), "payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), "term": debt["term"], "rate": debt["rate"]} for debt in debts}
     savings_idx = next(i for i, cat in enumerate(categories) if cat["name"] == "Сбережения")
     total_savings = 0
 
@@ -53,14 +53,17 @@ def simulate_period(income, categories, debts):
         total_savings += result[savings_idx]
         for debt_name, debt in debt_history.items():
             if debt["term"] > 0 and debt["remaining"] > 0:
-                debt["payment"] = calculate_annuity_payment(debt["remaining"], debt["term"], debt["rate"])
                 monthly_rate = debt["rate"] / 12
                 interest = debt["remaining"] * monthly_rate
-                principal = debt["payment"] - interest
+                principal = debt["initial_payment"] - interest
                 debt["remaining"] = max(0, debt["remaining"] - principal)
                 debt["term"] -= 1
-                if debt["remaining"] <= 0:
+                if debt["remaining"] > 0 and debt["term"] > 0:
+                    debt["payment"] = debt["initial_payment"]
+                else:
                     debt["payment"] = 0
+                    if debt["remaining"] > 0:
+                        debt["payment"] = calculate_annuity_payment(debt["remaining"], debt["term"], debt["rate"])
         save_budget_to_history(current_month, income, result, total_debt_payment)
 
     if goals:
