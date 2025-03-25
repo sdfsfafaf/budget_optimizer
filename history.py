@@ -1,49 +1,59 @@
 import sqlite3
-import os
-from datetime import datetime
-from data import calculate_annuity_payment
+from datetime import datetime, timedelta
 
-DB_PATH = "budget.db"
-
-def init_db():
-    if not os.path.exists(DB_PATH):
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("CREATE TABLE IF NOT EXISTS budget_history (month TEXT, category TEXT, amount REAL)")
-        c.execute("CREATE TABLE IF NOT EXISTS income_history (month TEXT, income REAL)")
-        conn.commit()
-        conn.close()
+DB_FILE = "budget.db"
 
 def load_income_history():
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT month, income FROM income_history")
-    history = {row[0]: row[1] for row in c.fetchall()}
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS income (month TEXT PRIMARY KEY, amount REAL)")
+    cursor.execute("SELECT month, amount FROM income")
+    history = dict(cursor.fetchall())
+    if not history:
+        num_months = int(input("На сколько месяцев заполнить историю доходов? "))
+        for i in range(num_months):
+            month = (datetime.now() + timedelta(days=30 * i)).strftime("%Y-%m")
+            amount = float(input(f"Введите доход за {month}: "))
+            cursor.execute("INSERT OR REPLACE INTO income (month, amount) VALUES (?, ?)", (month, amount))
+        conn.commit()
+        cursor.execute("SELECT month, amount FROM income")
+        history = dict(cursor.fetchall())
     conn.close()
     return history
 
-def update_debt_after_payment(remaining, payment, term, rate):
-    if term <= 0 or remaining <= 0:
-        return 0, 0
+def update_debt_after_payment(amount, payment, term, rate):
     monthly_rate = rate / 12
-    interest = remaining * monthly_rate
+    interest = amount * monthly_rate
     principal = payment - interest
-    remaining = max(0, remaining - principal)
-    term -= 1
-    return remaining, term
+    new_amount = max(0, amount - principal)
+    new_term = term - 1
+    return new_amount, new_term
 
-def save_budget_to_history(month, income, allocations, debt_payment):
-    init_db()
+def save_budget_to_history(month, income, budget, debt_payment):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS budget (
+            month TEXT,
+            category TEXT,
+            amount REAL,
+            PRIMARY KEY (month, category)
+        )
+    """)
+    cursor.execute("CREATE TABLE IF NOT EXISTS debt_payments (month TEXT PRIMARY KEY, amount REAL)")
+    
     from data import load_categories
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO income_history VALUES (?, ?)", (month, income))
     categories = load_categories()
-    for i, amount in enumerate(allocations):
-        if i < len(categories) and categories[i]["active"]:
-            c.execute("INSERT INTO budget_history VALUES (?, ?, ?)", (month, categories[i]["name"], amount))
+    for i, amount in enumerate(budget):
+        if amount > 0 and categories[i]["active"]:
+            cursor.execute(
+                "INSERT OR REPLACE INTO budget (month, category, amount) VALUES (?, ?, ?)",
+                (month, categories[i]["name"], amount)
+            )
     if debt_payment > 0:
-        c.execute("INSERT INTO budget_history VALUES (?, ?, ?)", (month, "Долги", debt_payment))
+        cursor.execute(
+            "INSERT OR REPLACE INTO debt_payments (month, amount) VALUES (?, ?)",
+            (month, debt_payment)
+        )
     conn.commit()
     conn.close()
