@@ -53,7 +53,11 @@ def simulate_period(income, categories, debts):
         total_savings += result[savings_idx]
         for debt_name, debt in debt_history.items():
             if debt["term"] > 0 and debt["remaining"] > 0:
-                debt["remaining"], debt["term"] = update_debt_after_payment(debt["remaining"], debt["payment"], debt["term"], debt["rate"])
+                monthly_rate = debt["rate"] / 12
+                interest = debt["remaining"] * monthly_rate
+                principal = debt["payment"] - interest
+                debt["remaining"] = max(0, debt["remaining"] - principal)
+                debt["term"] -= 1
                 if debt["remaining"] > 0 and debt["term"] > 0:
                     debt["payment"] = calculate_annuity_payment(debt["remaining"], debt["term"], debt["rate"])
                 else:
