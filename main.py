@@ -16,7 +16,7 @@ def simulate_period(income, categories, debts):
         current_month = (datetime.now() + timedelta(days=30 * (month - 1))).strftime("%Y-%m")
         fixed_costs = sum(cat["fixed"] or 0 for cat in categories if cat["active"] and cat["fixed"])
         min_costs = sum(cat["min"] for cat in categories if cat["active"] and not cat["fixed"] and cat["name"] != "Сбережения")
-        total_debt_payment = sum(debt["payment"] for debt in debt_history.values() if debt["term"] > 0)
+        total_debt_payment = sum(debt["payment"] for debt in debt_history.values() if debt["term"] > 0 and debt["remaining"] > 0)
         available_after_fixed = income - fixed_costs - total_debt_payment
         available_for_savings = available_after_fixed - min_costs
 
@@ -52,7 +52,7 @@ def simulate_period(income, categories, debts):
 
         total_savings += result[savings_idx]
         for debt_name, debt in debt_history.items():
-            if debt["term"] > 0:
+            if debt["term"] > 0 and debt["remaining"] > 0:
                 debt["remaining"], debt["term"] = update_debt_after_payment(debt["remaining"], debt["payment"], debt["term"], debt["rate"])
                 if debt["remaining"] > 0 and debt["term"] > 0:
                     debt["payment"] = calculate_annuity_payment(debt["remaining"], debt["term"], debt["rate"])
@@ -71,7 +71,7 @@ def simulate_period(income, categories, debts):
 
     dates = [res[0] for res in results]
     savings = [res[1][savings_idx] for res in results]
-    debt_payments = [sum(debt["payment"] for debt in debt_history.values() if debt["term"] > 0) for _ in results]
+    debt_payments = [sum(debt["payment"] for debt in debt_history.values() if debt["term"] > 0 and debt["remaining"] > 0) or 0 for _ in results]
 
     plt.figure(figsize=(10, 6))
     plt.plot(dates, savings, label="Сбережения")
