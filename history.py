@@ -11,9 +11,9 @@ def load_income_history():
     history = dict(cursor.fetchall())
     if not history:
         num_months = int(input("На сколько месяцев заполнить историю доходов? "))
+        amount = float(input("Введите доход (будет применён ко всем месяцам): "))
         for i in range(num_months):
             month = (datetime.now() + timedelta(days=30 * i)).strftime("%Y-%m")
-            amount = float(input(f"Введите доход за {month}: "))
             cursor.execute("INSERT OR REPLACE INTO income (month, amount) VALUES (?, ?)", (month, amount))
         conn.commit()
         cursor.execute("SELECT month, amount FROM income")
