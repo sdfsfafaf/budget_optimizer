@@ -91,11 +91,10 @@ def simulate_period(income, categories, debts):
     plt.show()
 
 def main():
+    income_history = load_income_history()
     fill_history = input("Хотите заполнить историю? (да/нет)\n")
     if fill_history.lower() == "да":
-        income_history = load_income_history()
-    else:
-        income_history = {}
+        income_history = load_income_history()  # Повторная загрузка после заполнения
 
     current_month = datetime.now().strftime("%Y-%m")
     income = income_history.get(current_month, 100000.0)
