@@ -2,7 +2,7 @@ import random
 import numpy as np
 from history import load_budget_history
 
-def initialize_population(pop_size, num_categories, income, debts, fixed_costs, min_costs, months):
+def initialize_population(pop_size, num_categories, income, debts, fixed_costs, min_costs, months, categories):
     """Инициализация популяции решений для нескольких месяцев."""
     population = []
     for _ in range(pop_size):
@@ -84,7 +84,7 @@ def crossover(parent1, parent2):
         child.append(m1[:point] + m2[point:])
     return child
 
-def mutate(solution, income, fixed_costs, min_costs, debts):
+def mutate(solution, income, fixed_costs, min_costs, debts, categories):
     """Мутация решения."""
     for month_solution in solution:
         idx = random.randint(0, len(month_solution) - 1)
@@ -99,8 +99,6 @@ def mutate(solution, income, fixed_costs, min_costs, debts):
 
 def optimize_budget(income, categories, debts, goals, months=1, pop_size=100, generations=50):
     """Основная функция ГА для оптимизации бюджета."""
-    global categories  # Для доступа в других функциях
-    categories = categories
     fixed_costs = sum(c["fixed"] or 0 for c in categories if c["active"])
     min_costs = sum(c["min"] for c in categories if c["active"] and not c["fixed"])
     
@@ -110,7 +108,7 @@ def optimize_budget(income, categories, debts, goals, months=1, pop_size=100, ge
         history = None
     
     # Инициализация популяции
-    population = initialize_population(pop_size, len(categories), income, debts, fixed_costs, min_costs, months)
+    population = initialize_population(pop_size, len(categories), income, debts, fixed_costs, min_costs, months, categories)
     
     # Эволюция
     for _ in range(generations):
@@ -121,7 +119,7 @@ def optimize_budget(income, categories, debts, goals, months=1, pop_size=100, ge
             parent1, parent2 = random.sample(population[:pop_size // 2], 2)
             child = crossover(parent1, parent2)
             if random.random() < 0.1:
-                child = mutate(child, income, fixed_costs, min_costs, debts)
+                child = mutate(child, income, fixed_costs, min_costs, debts, categories)
             new_population.append(child)
         
         population = new_population
