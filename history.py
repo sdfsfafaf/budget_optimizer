@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 DB_FILE = "budget.db"
 
+
 def load_income_history():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -21,6 +22,7 @@ def load_income_history():
     conn.close()
     return history
 
+
 def update_debt_after_payment(amount, payment, term, rate):
     monthly_rate = rate / 12
     interest = amount * monthly_rate
@@ -28,6 +30,7 @@ def update_debt_after_payment(amount, payment, term, rate):
     new_amount = max(0, amount - principal)
     new_term = term - 1
     return new_amount, new_term
+
 
 def save_budget_to_history(month, income, budget, debt_payment):
     conn = sqlite3.connect(DB_FILE)
@@ -41,7 +44,7 @@ def save_budget_to_history(month, income, budget, debt_payment):
         )
     """)
     cursor.execute("CREATE TABLE IF NOT EXISTS debt_payments (month TEXT PRIMARY KEY, amount REAL)")
-    
+
     from data import load_categories
     categories = load_categories()
     for i, amount in enumerate(budget):
@@ -57,3 +60,37 @@ def save_budget_to_history(month, income, budget, debt_payment):
         )
     conn.commit()
     conn.close()
+
+
+def load_budget_history():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS budget (
+            month TEXT,
+            category TEXT,
+            amount REAL,
+            PRIMARY KEY (month, category)
+        )
+    """)
+    cursor.execute("CREATE TABLE IF NOT EXISTS debt_payments (month TEXT PRIMARY KEY, amount REAL)")
+
+    cursor.execute("SELECT month, category, amount FROM budget")
+    budget_rows = cursor.fetchall()
+    cursor.execute("SELECT month, amount FROM debt_payments")
+    debt_rows = dict(cursor.fetchall())
+
+    conn.close()
+
+    history = {}
+    for month, category, amount in budget_rows:
+        if month not in history:
+            history[month] = {}
+        history[month][category] = amount
+
+    for month in debt_rows:
+        if month not in history:
+            history[month] = {}
+        history[month]["debts"] = debt_rows[month]
+
+    return list(history.values()) if history else None

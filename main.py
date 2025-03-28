@@ -4,49 +4,38 @@ from data import load_categories, save_categories, load_goals, save_goals, calcu
 from history import load_income_history, save_budget_to_history
 from ga import optimize_budget
 
+
 def simulate_period(income, categories, debts):
     num_months = int(input("Введите количество месяцев для расчёта бюджета (например, 6): "))
     goals = load_goals()
     results = []
-    debt_history = {debt["name"]: {"remaining": debt["amount"], 
-                                   "initial_payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), 
-                                   "payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), 
-                                   "term": debt["term"], 
-                                   "rate": debt["rate"]} 
+    debt_history = {debt["name"]: {"remaining": debt["amount"],
+                                   "initial_payment": calculate_annuity_payment(debt["amount"], debt["term"],
+                                                                                debt["rate"]),
+                                   "payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]),
+                                   "term": debt["term"],
+                                   "rate": debt["rate"]}
                     for debt in debts}
     savings_idx = next(i for i, cat in enumerate(categories) if cat["name"] == "Сбережения")
     total_savings = 0
 
-    # Оптимизация бюджета на все месяцы
     debts_list = list(debt_history.values())
     solution, updated_debts = optimize_budget(income, categories, debts_list, goals, months=num_months)
-    
-    # Синхронизируем исходные долги с результатом ГА
-    for debt in debts_list:
-        debt["remaining"] = updated_debts[debts_list.index(debt)]["remaining"]
-        debt["payment"] = updated_debts[debts_list.index(debt)]["payment"]
 
+    # Синхронизация долгов только после оптимизации
     for month in range(num_months):
         current_month = (datetime.now() + timedelta(days=30 * month)).strftime("%Y-%m")
         month_solution = solution[month]
         total_debt_payment = sum(d["payment"] for d in debts_list if d["remaining"] > 0)
-        
+
         print(f"\nМесяц {month + 1} ({current_month}):")
         for i, cat in enumerate(categories):
             if cat["active"] and month_solution[i] > 0:
                 print(f"{cat['name']}: {month_solution[i]:.2f} руб.")
         print(f"Долги: {total_debt_payment:.2f} руб.")
         print(f"Общая сумма: {sum(month_solution) + total_debt_payment:.2f} руб.")
-        
+
         total_savings += month_solution[savings_idx]
-        for debt in debts_list:
-            if debt["remaining"] > 0:
-                monthly_rate = debt["rate"] / 12
-                interest = debt["remaining"] * monthly_rate
-                principal = debt["payment"] - interest
-                debt["remaining"] = max(0, debt["remaining"] - principal)
-                if debt["remaining"] <= 0:
-                    debt["payment"] = 0
         save_budget_to_history(current_month, income, month_solution, total_debt_payment)
         results.append((current_month, month_solution, total_debt_payment))
 
@@ -59,7 +48,6 @@ def simulate_period(income, categories, debts):
                 print(f"Цель '{goal['name']}': {goal['amount']} руб. достигнута через {months_needed:.1f} мес.")
                 seen_goals.add(goal["name"])
 
-    # График с динамическими платежами по долгам
     dates = [res[0] for res in results]
     savings = [res[1][savings_idx] for res in results]
     debt_payments = [res[2] for res in results]
