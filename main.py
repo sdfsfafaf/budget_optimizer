@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from data import load_categories, save_categories, load_goals, save_goals, calculate_annuity_payment
-from history import load_income_history, update_debt_after_payment, save_budget_to_history
+from history import load_income_history, save_budget_to_history
 from ga import optimize_budget
 
 def simulate_period(income, categories, debts):
@@ -17,10 +17,15 @@ def simulate_period(income, categories, debts):
     savings_idx = next(i for i, cat in enumerate(categories) if cat["name"] == "Сбережения")
     total_savings = 0
 
-    # Оптимизация бюджета на все месяцы сразу с помощью ГА
+    # Оптимизация бюджета на все месяцы
     debts_list = list(debt_history.values())
-    solution = optimize_budget(income, categories, debts_list, goals, months=num_months)
+    solution, updated_debts = optimize_budget(income, categories, debts_list, goals, months=num_months)
     
+    # Синхронизируем исходные долги с результатом ГА
+    for debt in debts_list:
+        debt["remaining"] = updated_debts[debts_list.index(debt)]["remaining"]
+        debt["payment"] = updated_debts[debts_list.index(debt)]["payment"]
+
     for month in range(num_months):
         current_month = (datetime.now() + timedelta(days=30 * month)).strftime("%Y-%m")
         month_solution = solution[month]
@@ -43,7 +48,7 @@ def simulate_period(income, categories, debts):
                 if debt["remaining"] <= 0:
                     debt["payment"] = 0
         save_budget_to_history(current_month, income, month_solution, total_debt_payment)
-        results.append((current_month, month_solution))
+        results.append((current_month, month_solution, total_debt_payment))
 
     if goals:
         print(f"\nИтоговые сбережения за {num_months} мес.: {total_savings:.2f} руб.")
@@ -54,9 +59,10 @@ def simulate_period(income, categories, debts):
                 print(f"Цель '{goal['name']}': {goal['amount']} руб. достигнута через {months_needed:.1f} мес.")
                 seen_goals.add(goal["name"])
 
+    # График с динамическими платежами по долгам
     dates = [res[0] for res in results]
     savings = [res[1][savings_idx] for res in results]
-    debt_payments = [sum(debt["payment"] for debt in debts_list if debt["remaining"] > 0) or 0 for _ in results]
+    debt_payments = [res[2] for res in results]
 
     plt.figure(figsize=(10, 6))
     plt.plot(dates, savings, label="Сбережения")
