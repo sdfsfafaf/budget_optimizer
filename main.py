@@ -8,64 +8,42 @@ def simulate_period(income, categories, debts):
     num_months = int(input("Введите количество месяцев для расчёта бюджета (например, 6): "))
     goals = load_goals()
     results = []
-    debt_history = {debt["name"]: {"remaining": debt["amount"], "initial_payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), "payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), "term": debt["term"], "rate": debt["rate"]} for debt in debts}
+    debt_history = {debt["name"]: {"remaining": debt["amount"], 
+                                   "initial_payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), 
+                                   "payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]), 
+                                   "term": debt["term"], 
+                                   "rate": debt["rate"]} 
+                    for debt in debts}
     savings_idx = next(i for i, cat in enumerate(categories) if cat["name"] == "Сбережения")
     total_savings = 0
 
-    for month in range(1, num_months + 1):
-        current_month = (datetime.now() + timedelta(days=30 * (month - 1))).strftime("%Y-%m")
-        fixed_costs = sum(cat["fixed"] or 0 for cat in categories if cat["active"] and cat["fixed"])
-        min_costs = sum(cat["min"] for cat in categories if cat["active"] and not cat["fixed"] and cat["name"] != "Сбережения")
-        total_debt_payment = sum(debt["payment"] for debt in debt_history.values() if debt["term"] > 0 and debt["remaining"] > 0)
-        available_after_fixed = income - fixed_costs - total_debt_payment
-        available_for_savings = available_after_fixed - min_costs
-
-        if available_for_savings < 0:
-            print(f"Месяц {month}: Недостаточно средств для минимальных расходов.")
-            break
-
-        strategy = "max_savings"
-        if goals:
-            min_savings = min(goal["amount"] / goal["term"] for goal in goals)
-            print(f"\nМесяц {month} ({current_month}):")
-            print(f"Цель требует {min_savings:.2f} руб./мес., доступно {available_for_savings:.2f} руб./мес.")
-            print("Хотите максимум на сбережения или баланс? (макс/запас)")
-            choice = input().lower()
-            if choice == "макс":
-                strategy = "max_savings"
-                categories[savings_idx]["min"] = available_for_savings
-            else:
-                strategy = "balance"
-                savings = float(input(f"Введите сумму для сбережений (0–{available_for_savings:.2f}): "))
-                savings = max(0, min(available_for_savings, savings))
-                categories[savings_idx]["min"] = savings
-
-        result = optimize_budget(income, categories, 0, total_debt_payment, strategy)
-        results.append((current_month, result))
-
-        print(f"\nМесяц {month} ({current_month}):")
+    # Оптимизация бюджета на все месяцы сразу с помощью ГА
+    debts_list = list(debt_history.values())
+    solution = optimize_budget(income, categories, debts_list, goals, months=num_months)
+    
+    for month in range(num_months):
+        current_month = (datetime.now() + timedelta(days=30 * month)).strftime("%Y-%m")
+        month_solution = solution[month]
+        total_debt_payment = sum(d["payment"] for d in debts_list if d["remaining"] > 0)
+        
+        print(f"\nМесяц {month + 1} ({current_month}):")
         for i, cat in enumerate(categories):
-            if cat["active"] and result[i] > 0:
-                print(f"{cat['name']}: {result[i]:.2f} руб.")
+            if cat["active"] and month_solution[i] > 0:
+                print(f"{cat['name']}: {month_solution[i]:.2f} руб.")
         print(f"Долги: {total_debt_payment:.2f} руб.")
-        print(f"Общая сумма: {sum(result) + total_debt_payment:.2f} руб.")
-
-        total_savings += result[savings_idx]
-        for debt_name, debt in debt_history.items():
-            if debt["term"] > 0 and debt["remaining"] > 0:
+        print(f"Общая сумма: {sum(month_solution) + total_debt_payment:.2f} руб.")
+        
+        total_savings += month_solution[savings_idx]
+        for debt in debts_list:
+            if debt["remaining"] > 0:
                 monthly_rate = debt["rate"] / 12
                 interest = debt["remaining"] * monthly_rate
-                principal = debt["initial_payment"] - interest
+                principal = debt["payment"] - interest
                 debt["remaining"] = max(0, debt["remaining"] - principal)
-                debt["term"] -= 1
                 if debt["remaining"] <= 0:
                     debt["payment"] = 0
-                    debt["remaining"] = 0
-                elif debt["term"] > 0:
-                    debt["payment"] = debt["initial_payment"]
-                else:
-                    debt["payment"] = calculate_annuity_payment(debt["remaining"], max(1, debt["term"]), debt["rate"])
-        save_budget_to_history(current_month, income, result, total_debt_payment)
+        save_budget_to_history(current_month, income, month_solution, total_debt_payment)
+        results.append((current_month, month_solution))
 
     if goals:
         print(f"\nИтоговые сбережения за {num_months} мес.: {total_savings:.2f} руб.")
@@ -78,7 +56,7 @@ def simulate_period(income, categories, debts):
 
     dates = [res[0] for res in results]
     savings = [res[1][savings_idx] for res in results]
-    debt_payments = [sum(debt["payment"] for debt in debt_history.values() if debt["term"] > 0 and debt["remaining"] > 0) or 0 for _ in results]
+    debt_payments = [sum(debt["payment"] for debt in debts_list if debt["remaining"] > 0) or 0 for _ in results]
 
     plt.figure(figsize=(10, 6))
     plt.plot(dates, savings, label="Сбережения")
