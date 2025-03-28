@@ -22,11 +22,18 @@ def simulate_period(income, categories, debts):
     debts_list = list(debt_history.values())
     solution, updated_debts = optimize_budget(income, categories, debts_list, goals, months=num_months)
 
-    # Синхронизация долгов только после оптимизации
     for month in range(num_months):
         current_month = (datetime.now() + timedelta(days=30 * month)).strftime("%Y-%m")
         month_solution = solution[month]
         total_debt_payment = sum(d["payment"] for d in debts_list if d["remaining"] > 0)
+
+        # Корректируем сумму, чтобы не превышать доход
+        total_spend = sum(month_solution) + total_debt_payment
+        if total_spend > income:
+            scale = (income - total_debt_payment) / sum(month_solution)
+            for i in range(len(month_solution)):
+                if not categories[i]["fixed"]:
+                    month_solution[i] *= scale
 
         print(f"\nМесяц {month + 1} ({current_month}):")
         for i, cat in enumerate(categories):
