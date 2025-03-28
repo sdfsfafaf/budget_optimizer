@@ -7,10 +7,13 @@ def initialize_population(pop_size, num_categories, income, debts, fixed_costs, 
     population = []
     for _ in range(pop_size):
         solution = []
-        remaining_debts = [d["remaining"] for d in debts]
+        # Создаём копию долгов для каждого решения
+        temp_debts = [{"remaining": d["remaining"], "payment": d["payment"], "rate": d["rate"]} for d in debts]
         for _ in range(months):
             month_solution = []
-            available = income - fixed_costs - sum(d["payment"] for d in debts if d["remaining"] > 0)
+            available = income - fixed_costs - sum(d["payment"] for d in temp_debts if d["remaining"] > 0)
+            if available < 0:
+                available = 0  # Предотвращаем отрицательный бюджет
             for i in range(num_categories):
                 if categories[i]["fixed"]:
                     month_solution.append(categories[i]["fixed"])
@@ -23,8 +26,8 @@ def initialize_population(pop_size, num_categories, income, debts, fixed_costs, 
                 scale = income / total
                 month_solution = [x * scale for x in month_solution]
             solution.append(month_solution)
-            # Обновляем долги для следующего месяца
-            for d in debts:
+            # Обновляем временные долги для следующего месяца
+            for d in temp_debts:
                 if d["remaining"] > 0:
                     interest = d["remaining"] * (d["rate"] / 12)
                     principal = d["payment"] - interest
@@ -35,11 +38,12 @@ def initialize_population(pop_size, num_categories, income, debts, fixed_costs, 
 def fitness(solution, categories, income, debts, goals, history, weights=(0.4, 0.3, 0.3)):
     """Многоцелевая фитнес-функция: сбережения, долги, баланс."""
     savings_total = 0
-    debt_remaining = sum(d["remaining"] for d in debts[:])  # Копия начальных долгов
+    temp_debts = [{"remaining": d["remaining"], "payment": d["payment"], "rate": d["rate"]} for d in debts]
+    debt_remaining = sum(d["remaining"] for d in temp_debts)
     balance_score = 0
     total_weight = sum(c["weight"] for c in categories if not c["fixed"] and c["active"])
 
-    for month_idx, month_solution in enumerate(solution):
+    for month_solution in enumerate(solution):
         savings = month_solution[[c["name"] for c in categories].index("Сбережения")]
         savings_total += savings
         
@@ -50,7 +54,7 @@ def fitness(solution, categories, income, debts, goals, history, weights=(0.4, 0
                                for i, s in enumerate(month_solution) if not categories[i]["fixed"] and categories[i]["active"])
         
         # Обновление долгов
-        for d in debts:
+        for d in temp_debts:
             if d["remaining"] > 0:
                 interest = d["remaining"] * (d["rate"] / 12)
                 principal = d["payment"] - interest
@@ -86,15 +90,24 @@ def crossover(parent1, parent2):
 
 def mutate(solution, income, fixed_costs, min_costs, debts, categories):
     """Мутация решения."""
+    temp_debts = [{"remaining": d["remaining"], "payment": d["payment"], "rate": d["rate"]} for d in debts]
     for month_solution in solution:
         idx = random.randint(0, len(month_solution) - 1)
         if not categories[idx]["fixed"]:
-            available = income - fixed_costs - sum(d["payment"] for d in debts if d["remaining"] > 0)
+            available = income - fixed_costs - sum(d["payment"] for d in temp_debts if d["remaining"] > 0)
+            if available < 0:
+                available = 0
             month_solution[idx] = random.uniform(categories[idx]["min"], available / 2)
         total = sum(month_solution)
         if total > income:
             scale = income / total
             month_solution[:] = [x * scale for x in month_solution]
+        # Обновляем долги после мутации
+        for d in temp_debts:
+            if d["remaining"] > 0:
+                interest = d["remaining"] * (d["rate"] / 12)
+                principal = d["payment"] - interest
+                d["remaining"] = max(0, d["remaining"] - principal)
     return solution
 
 def optimize_budget(income, categories, debts, goals, months=1, pop_size=100, generations=50):
@@ -126,4 +139,15 @@ def optimize_budget(income, categories, debts, goals, months=1, pop_size=100, ge
     
     # Лучшее решение
     best_solution = max(population, key=lambda x: fitness(x, categories, income, debts[:], goals, history))
-    return best_solution
+    
+    # Обновляем долги в исходном списке на основе лучшего решения
+    for month_solution in best_solution:
+        for d in debts:
+            if d["remaining"] > 0:
+                interest = d["remaining"] * (d["rate"] / 12)
+                principal = d["payment"] - interest
+                d["remaining"] = max(0, d["remaining"] - principal)
+                if d["remaining"] <= 0:
+                    d["payment"] = 0
+    
+    return best_solution, debts
