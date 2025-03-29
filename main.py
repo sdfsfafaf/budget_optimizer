@@ -4,14 +4,11 @@ from data import load_categories, save_categories, load_goals, save_goals, calcu
 from history import load_income_history, save_budget_to_history
 from ga import optimize_budget
 
-
 def simulate_period(income, categories, debts):
     num_months = int(input("Введите количество месяцев для расчёта бюджета (например, 6): "))
     goals = load_goals()
     results = []
     debt_history = {debt["name"]: {"remaining": debt["amount"],
-                                   "initial_payment": calculate_annuity_payment(debt["amount"], debt["term"],
-                                                                                debt["rate"]),
                                    "payment": calculate_annuity_payment(debt["amount"], debt["term"], debt["rate"]),
                                    "term": debt["term"],
                                    "rate": debt["rate"]}
@@ -24,28 +21,77 @@ def simulate_period(income, categories, debts):
 
     for month in range(num_months):
         current_month = (datetime.now() + timedelta(days=30 * month)).strftime("%Y-%m")
-        month_solution = solution[month]
-        total_debt_payment = sum(d["payment"] for d in debts_list if d["remaining"] > 0)
+        month_solution = solution[month].copy()
+        total_debt_payment = sum(d["payment"] for d in updated_debts if d["remaining"] > 0)
+        available_income = income - total_debt_payment
+        total_fixed = sum(cat["fixed"] for cat in categories if cat["fixed"] and cat["active"])
+        total_min = sum(cat["min"] for cat in categories if not cat["fixed"] and cat["active"])
 
-        # Корректируем сумму, чтобы не превышать доход
-        total_spend = sum(month_solution) + total_debt_payment
-        if total_spend > income:
-            scale = (income - total_debt_payment) / sum(month_solution)
-            for i in range(len(month_solution)):
-                if not categories[i]["fixed"]:
-                    month_solution[i] *= scale
+        # Корректировка расходов до добавления долгов
+        total_spend = sum(month_solution)
+        if total_spend > available_income:
+            non_fixed_total = sum(s for i, s in enumerate(month_solution) if not categories[i]["fixed"])
+            if non_fixed_total > 0:
+                scale = (available_income - total_fixed) / non_fixed_total
+                for i in range(len(month_solution)):
+                    if not categories[i]["fixed"]:
+                        month_solution[i] = max(categories[i]["min"], month_solution[i] * scale)
+            total_spend = sum(month_solution)
 
+        # Досрочное погашение долгов
+        remaining_income = available_income - total_spend
+        if remaining_income > 0:
+            sorted_debts = sorted([d for d in updated_debts if d["remaining"] > 0], key=lambda x: x["rate"], reverse=True)
+            for d in sorted_debts:
+                if remaining_income > 0:
+                    extra_payment = min(remaining_income, d["remaining"] - d["payment"])
+                    if extra_payment > 0:
+                        d["remaining"] -= extra_payment
+                        total_debt_payment += extra_payment
+                        remaining_income -= extra_payment
+                        if d["remaining"] <= 0:
+                            d["payment"] = 0
+
+        # Строгая финальная корректировка
+        total_spend_with_debts = sum(month_solution) + total_debt_payment
+        if total_spend_with_debts > income:
+            excess = total_spend_with_debts - income
+            savings = month_solution[savings_idx]
+            if savings > excess:
+                month_solution[savings_idx] -= excess
+            else:
+                month_solution[savings_idx] = 0
+                remaining_excess = excess - savings
+                non_fixed_total = sum(s for i, s in enumerate(month_solution) if not categories[i]["fixed"] and i != savings_idx)
+                if non_fixed_total > 0:
+                    scale = (income - total_debt_payment - total_fixed - month_solution[savings_idx]) / non_fixed_total
+                    for i in range(len(month_solution)):
+                        if not categories[i]["fixed"] and i != savings_idx:
+                            month_solution[i] = max(categories[i]["min"], month_solution[i] * scale)
+            total_spend_with_debts = sum(month_solution) + total_debt_payment
+
+        # Вывод
         print(f"\nМесяц {month + 1} ({current_month}):")
         for i, cat in enumerate(categories):
             if cat["active"] and month_solution[i] > 0:
                 print(f"{cat['name']}: {month_solution[i]:.2f} руб.")
         print(f"Долги: {total_debt_payment:.2f} руб.")
-        print(f"Общая сумма: {sum(month_solution) + total_debt_payment:.2f} руб.")
+        print(f"Общая сумма: {total_spend_with_debts:.2f} руб.")
 
         total_savings += month_solution[savings_idx]
         save_budget_to_history(current_month, income, month_solution, total_debt_payment)
         results.append((current_month, month_solution, total_debt_payment))
 
+        # Обновление долгов
+        for d in updated_debts:
+            if d["remaining"] > 0:
+                interest = d["remaining"] * (d["rate"] / 12)
+                principal = min(d["payment"], d["remaining"] + interest) - interest
+                d["remaining"] = max(0, d["remaining"] - principal)
+                if d["remaining"] <= 0:
+                    d["payment"] = 0
+
+    # Вывод итогов и график
     if goals:
         print(f"\nИтоговые сбережения за {num_months} мес.: {total_savings:.2f} руб.")
         seen_goals = set()
