@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 
 DB_FILE = "budget.db"
 
-
 def load_income_history():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -21,16 +20,6 @@ def load_income_history():
         history = dict(cursor.fetchall())
     conn.close()
     return history
-
-
-def update_debt_after_payment(amount, payment, term, rate):
-    monthly_rate = rate / 12
-    interest = amount * monthly_rate
-    principal = payment - interest
-    new_amount = max(0, amount - principal)
-    new_term = term - 1
-    return new_amount, new_term
-
 
 def save_budget_to_history(month, income, budget, debt_payment):
     conn = sqlite3.connect(DB_FILE)
@@ -60,7 +49,6 @@ def save_budget_to_history(month, income, budget, debt_payment):
         )
     conn.commit()
     conn.close()
-
 
 def load_budget_history():
     conn = sqlite3.connect(DB_FILE)
