@@ -15,6 +15,10 @@ def simulate_period(income, categories, debts, weights=(0.5, 0.3, 0.2)):
                     for debt in debts}
     savings_idx = next(i for i, cat in enumerate(categories) if cat["name"] == "Сбережения")
     total_savings = 0
+    savings_tolerance = 0.02  # Допуск 2%
+
+    # Проверяем, выбран ли приоритет "Погасить долги" (веса (0.2, 0.7, 0.1))
+    prioritize_debt_repayment = weights == (0.2, 0.7, 0.1)
 
     debts_list = list(debt_history.values())
     solution, updated_debts = optimize_budget(income, categories, debts_list, goals, months=num_months, weights=weights)
@@ -22,66 +26,49 @@ def simulate_period(income, categories, debts, weights=(0.5, 0.3, 0.2)):
     for month in range(num_months):
         current_month = (datetime.now() + timedelta(days=30 * month)).strftime("%Y-%m")
         month_solution = solution[month].copy()
+
+        # Минимальные аннуитетные платежи по долгам
         total_debt_payment = sum(d["payment"] for d in updated_debts if d["remaining"] > 0)
         available_income = income - total_debt_payment
 
-        total_fixed = sum(cat["fixed"] for cat in categories if cat["fixed"] is not None and cat["active"])
-        total_regular = sum(cat["regular"] for cat in categories if cat["regular"] is not None and cat["active"]) or 0
-        total_mandatory_irregular = 0
-
-        for i, cat in enumerate(categories):
-            if cat["type"] == "irregular" and cat["mandatory"] and cat["active"] and month_solution[i] > 0:
-                total_mandatory_irregular += month_solution[i]
-
+        # Проверка превышения расходов
         total_spend = sum(month_solution)
         if total_spend > available_income:
-            non_mandatory_irregular_total = sum(s for i, s in enumerate(month_solution)
-                                                if categories[i]["type"] == "irregular" and not categories[i]["mandatory"] and categories[i]["active"])
-            if non_mandatory_irregular_total > 0 and total_spend - total_fixed - total_regular - total_mandatory_irregular > available_income:
-                scale = (available_income - total_fixed - total_regular - total_mandatory_irregular) / non_mandatory_irregular_total
+            total_fixed = sum(cat["fixed"] for cat in categories if cat["fixed"] is not None and cat["active"])
+            non_fixed_total = sum(s for i, s in enumerate(month_solution) if categories[i]["fixed"] is None and categories[i]["active"])
+            if non_fixed_total > 0:
+                scale = (available_income - total_fixed) / non_fixed_total
                 for i, cat in enumerate(categories):
-                    if cat["type"] == "irregular" and not cat["mandatory"] and cat["active"]:
-                        month_solution[i] = max(0, month_solution[i] * scale)
-            regular_total = sum(s for i, s in enumerate(month_solution) if categories[i]["regular"] is not None and categories[i]["active"])
-            if regular_total > 0 and total_spend > available_income:
-                scale = (available_income - total_fixed - total_mandatory_irregular) / regular_total
-                for i, cat in enumerate(categories):
-                    if cat["regular"] is not None and cat["active"]:
+                    if cat["fixed"] is None and cat["active"]:
                         month_solution[i] = max(cat["min"], month_solution[i] * scale)
             total_spend = sum(month_solution)
 
+        # Остаток дохода
         remaining_income = available_income - total_spend
+
+        # Досрочное погашение долгов, если выбран приоритет "Погасить долги"
+        if prioritize_debt_repayment and remaining_income > 0:
+            sorted_debts = sorted([d for d in updated_debts if d["remaining"] > 0], key=lambda x: x["rate"], reverse=True)
+            for d in sorted_debts:
+                if remaining_income > 0:
+                    extra_payment = min(remaining_income, d["remaining"])
+                    d["remaining"] -= extra_payment
+                    total_debt_payment += extra_payment
+                    remaining_income -= extra_payment
+                    if d["remaining"] <= 0:
+                        d["payment"] = 0
+
+        # Остаток направляем в сбережения
         if remaining_income > 0:
-            if any(d["remaining"] > 0 for d in updated_debts):
-                sorted_debts = sorted([d for d in updated_debts if d["remaining"] > 0], key=lambda x: x["rate"], reverse=True)
-                for d in sorted_debts:
-                    if remaining_income > 0:
-                        extra_payment = min(remaining_income, d["remaining"])
-                        d["remaining"] -= extra_payment
-                        total_debt_payment += extra_payment
-                        remaining_income -= extra_payment
-                        if d["remaining"] <= 0:
-                            d["payment"] = 0
-            else:
-                month_solution[savings_idx] += remaining_income
+            month_solution[savings_idx] += remaining_income
 
         total_spend_with_debts = sum(month_solution) + total_debt_payment
         if total_spend_with_debts > income:
             excess = total_spend_with_debts - income
             savings = month_solution[savings_idx]
-            if savings >= excess:
-                month_solution[savings_idx] -= excess
-            else:
-                month_solution[savings_idx] = 0
-                remaining_excess = excess - savings
-                non_mandatory_total = sum(s for i, s in enumerate(month_solution)
-                                          if categories[i]["type"] == "irregular" and not categories[i]["mandatory"] and categories[i]["active"])
-                if non_mandatory_total > 0:
-                    scale = (income - total_debt_payment - total_fixed - total_regular - total_mandatory_irregular) / non_mandatory_total
-                    for i, cat in enumerate(categories):
-                        if cat["type"] == "irregular" and not cat["mandatory"] and cat["active"]:
-                            month_solution[i] = max(0, month_solution[i] * scale)
+            month_solution[savings_idx] = max(0, savings - excess)
 
+        # Вывод бюджета
         print(f"\nМесяц {month + 1} ({current_month}):")
         for i, cat in enumerate(categories):
             if cat["active"] and month_solution[i] > 0:
@@ -93,6 +80,7 @@ def simulate_period(income, categories, debts, weights=(0.5, 0.3, 0.2)):
         save_budget_to_history(current_month, income, month_solution, total_debt_payment)
         results.append((current_month, month_solution, total_debt_payment))
 
+        # Обновление долгов
         for d in updated_debts:
             if d["remaining"] > 0:
                 interest = d["remaining"] * (d["rate"] / 12)
@@ -101,13 +89,20 @@ def simulate_period(income, categories, debts, weights=(0.5, 0.3, 0.2)):
                 if d["remaining"] <= 0:
                     d["payment"] = 0
 
+        # Проверка достижения цели с допуском 2%
+        if goals and total_savings >= goals[0]["amount"] * (1 - savings_tolerance):
+            break
+
     if goals:
-        print(f"\nИтоговые сбережения за {num_months} мес.: {total_savings:.2f} руб.")
+        print(f"\nИтоговые сбережения за {len(results)} мес.: {total_savings:.2f} руб.")
         seen_goals = set()
         for goal in goals:
             if goal["name"] not in seen_goals:
-                months_needed = goal["amount"] / total_savings * num_months if total_savings > 0 else float("inf")
-                print(f"Цель '{goal['name']}': {goal['amount']} руб. достигнута через {months_needed:.1f} мес.")
+                months_needed = goal["amount"] / total_savings * len(results) if total_savings > 0 else float("inf")
+                if total_savings >= goal["amount"] * (1 - savings_tolerance):
+                    print(f"Цель '{goal['name']}': {goal['amount']} руб. достигнута через {months_needed:.1f} мес.")
+                else:
+                    print(f"Цель '{goal['name']}': {goal['amount']} руб. не достигнута.")
                 seen_goals.add(goal["name"])
 
     dates = [res[0] for res in results]
